@@ -20,6 +20,10 @@ from pcdet.models import build_network, load_data_to_gpu
 from pcdet.utils import common_utils
 
 
+### for saving the predictions for vis in local machine
+import pickle as pkl
+
+
 class DemoDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
         """
@@ -68,6 +72,7 @@ def parse_config():
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
+    parser.add_argument('--output_dir', type=str, default='../output', help='specify the output directory')
 
     args = parser.parse_args()
 
@@ -85,25 +90,61 @@ def main():
         root_path=Path(args.data_path), ext=args.ext, logger=logger
     )
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
+    # import pdb; pdb.set_trace()
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
+
+    ### creating a specific output directory for saving the predictions
+    output_dir = Path(args.output_dir)
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f'Output directory: \t{output_dir}')
+    ### saving prediction on basis of name of file and name of model
+    output_dir = output_dir / Path(args.ckpt).stem
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f'Output directory: \t{output_dir}')
+    output_dir = output_dir / Path(args.data_path).stem
+    if not output_dir.exists():
+        output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f'Output directory: \t{output_dir}')
+    
+
+    # import pdb; pdb.set_trace()
+
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
+            import pdb; pdb.set_trace()
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
 
-            V.draw_scenes(
-                points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
-                ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
-            )
+            # import pdb; pdb.set_trace()
+            ### saving pred_dicts and also data_dict in the output_dir
+            save_preds = {}
+            save_preds['pred_boxes'] = pred_dicts[0]['pred_boxes'].cpu().numpy()
+            save_preds['pred_scores'] = pred_dicts[0]['pred_scores'].cpu().numpy()
+            save_preds['pred_labels'] = pred_dicts[0]['pred_labels'].cpu().numpy()
+            save_data = {}
+            save_data['points'] = data_dict['points'].cpu().numpy()
+            ### both are dictionaries save them using pickle
+            with open(output_dir / 'pred_dict.pkl', 'wb') as f:
+                pkl.dump(save_preds, f)
+            with open(output_dir / 'data_dict.pkl', 'wb') as f:
+                pkl.dump(save_data, f)
+            
+            # import pdb; pdb.set_trace()
+            # V.draw_scenes(
+            #     points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+            #     ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
+            # )
 
-            if not OPEN3D_FLAG:
-                mlab.show(stop=True)
+            # if not OPEN3D_FLAG:
+            #     mlab.show(stop=True)
 
     logger.info('Demo done.')
 

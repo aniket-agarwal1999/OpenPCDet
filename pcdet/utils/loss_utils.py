@@ -94,6 +94,7 @@ class WeightedSmoothL1Loss(nn.Module):
         super(WeightedSmoothL1Loss, self).__init__()
         self.beta = beta
         if code_weights is not None:
+            # import pdb; pdb.set_trace()
             self.code_weights = np.array(code_weights, dtype=np.float32)
             self.code_weights = torch.from_numpy(self.code_weights).cuda()
 
