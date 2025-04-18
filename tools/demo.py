@@ -19,6 +19,7 @@ from pcdet.datasets import DatasetTemplate
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.utils import common_utils
 
+import time
 
 ### for saving the predictions for vis in local machine
 import pickle as pkl
@@ -52,6 +53,11 @@ class DemoDataset(DatasetTemplate):
             points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
+        elif self.ext == '.ply':
+            pcd = open3d.io.read_point_cloud(self.sample_file_list[index])
+            points = np.asarray(pcd.points)
+            ### for kitti dataset
+            points = np.concatenate([points, np.zeros((points.shape[0], 1))], axis=1)
         else:
             raise NotImplementedError
 
@@ -71,7 +77,7 @@ def parse_config():
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ckpt', type=str, default=None, help='specify the pretrained model')
-    parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
+    parser.add_argument('--ext', type=str, default='.ply', help='specify the extension of your point cloud data file')
     parser.add_argument('--output_dir', type=str, default='../output', help='specify the output directory')
 
     args = parser.parse_args()
@@ -118,10 +124,13 @@ def main():
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
-            import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
+            start_time = time.time()
             pred_dicts, _ = model.forward(data_dict)
+            end_time = time.time()
+            logger.info(f'Inference time: {end_time - start_time:.4f}s')
 
             # import pdb; pdb.set_trace()
             ### saving pred_dicts and also data_dict in the output_dir
